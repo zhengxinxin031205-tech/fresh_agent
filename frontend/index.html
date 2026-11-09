@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>生鲜零售智能补货与损耗控制 Agent</title>
+<script src="/static/chart.umd.min.js"></script>
+<style>
+:root{--primary:#10b981;--primary-dark:#059669;--bg:#f0fdf4;--card:#ffffff;--text:#1f2937;--text2:#6b7280;--border:#e5e7eb;--danger:#ef4444;--warn:#f59e0b;--info:#3b82f6;--sidebar:#064e3b}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh}
+/* 侧边栏 */
+.sidebar{width:220px;background:var(--sidebar);color:#d1fae5;padding:0;flex-shrink:0;display:flex;flex-direction:column;position:fixed;height:100vh;overflow-y:auto}
+.sidebar .logo{padding:20px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sidebar .logo h1{font-size:16px;color:#fff;line-height:1.4}
+.sidebar .logo p{font-size:11px;color:#6ee7b7;margin-top:4px}
+.sidebar nav{padding:8px 0;flex:1}
+.sidebar nav a{display:flex;align-items:center;gap:10px;padding:11px 20px;color:#a7f3d0;text-decoration:none;font-size:14px;transition:all .2s;border-left:3px solid transparent}
+.sidebar nav a:hover{background:rgba(255,255,255,.08);color:#fff}
+.sidebar nav a.active{background:rgba(16,185,129,.25);color:#fff;border-left-color:var(--primary)}
+.sidebar nav a .icon{width:20px;text-align:center;font-size:15px}
+.sidebar .tier-badge{padding:12px 20px;font-size:12px;color:#6ee7b7;border-top:1px solid rgba(255,255,255,.1)}
+.sidebar .tier-badge span{background:var(--primary);color:#fff;padding:2px 8px;border-radius:10px;font-size:11px}
+/* 侧边栏"当前数据"卡片(logo下方,所有页面均可见) */
+.sidebar .current-data{margin:10px 14px;padding:10px 12px;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.35);border-radius:10px}
+.sidebar .current-data .cd-label{font-size:11px;color:#6ee7b7;font-weight:600;margin-bottom:5px}
+.sidebar .current-data .cd-name{font-size:13px;color:#fff;font-weight:600;line-height:1.4;word-break:break-all}
+.sidebar .current-data .cd-scale{font-size:11px;color:#a7f3d0;margin-top:4px}
+.sidebar .current-data.empty{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+.sidebar .current-data.empty .cd-name{color:#d1d5db;font-weight:500;font-size:12px}
+.sidebar .current-data.empty .cd-scale{color:#9ca3af}
+/* 主内容 */
+.main{margin-left:220px;flex:1;padding:24px 32px;min-width:0}
+.page-header{margin-bottom:20px}
+.page-header h2{font-size:22px;font-weight:600}
+.page-header p{font-size:13px;color:var(--text2);margin-top:4px}
+.page{display:none}
+.page.active{display:block}
+/* 卡片 */
+.card{background:var(--card);border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:16px}
+.card h3{font-size:15px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card h3 .dot{width:8px;height:8px;border-radius:50%;background:var(--primary)}
+/* 统计卡片 */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:16px}
+.stat-card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.stat-card .label{font-size:12px;color:var(--text2);margin-bottom:6px}
+.stat-card .value{font-size:26px;font-weight:700;color:var(--primary-dark)}
+.stat-card .sub{font-size:11px;color:var(--text2);margin-top:4px}
+.stat-card.warn .value{color:var(--warn)}
+.stat-card.danger .value{color:var(--danger)}
+.stat-card.info .value{color:var(--info)}
+/* 表格 */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#f0fdf4;padding:10px 12px;text-align:left;font-weight:600;color:var(--text2);border-bottom:2px solid var(--border);white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+tr:hover td{background:#f0fdf4}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}
+.badge.green{background:#d1fae5;color:#065f46}
+.badge.red{background:#fee2e2;color:#991b1b}
+.badge.yellow{background:#fef3c7;color:#92400e}
+.badge.blue{background:#dbeafe;color:#1e40af}
+.badge.gray{background:#f3f4f6;color:#4b5563}
+/* 按钮 */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .2s}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-outline{background:transparent;border:1px solid var(--primary);color:var(--primary)}
+.btn-outline:hover{background:var(--primary);color:#fff}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.period-bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.period-label{font-size:13px;color:var(--text2)}
+.period-btn{padding:6px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text2);font-size:13px;cursor:pointer;transition:all .2s}
+.period-btn:hover{border-color:var(--primary);color:var(--primary)}
+.period-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);font-weight:600}
+/* 表单 */
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:13px;font-weight:500;margin-bottom:5px;color:var(--text2)}
+.form-group select,.form-group input,.form-group textarea{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;outline:none;transition:border .2s}
+.form-group select:focus,.form-group input:focus{border-color:var(--primary)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* 图表容器 */
+.chart-box{position:relative;height:280px}
+.chart-box.sm{height:220px}
+/* 对话 */
+.chat-container{display:flex;flex-direction:column;height:calc(100vh - 140px)}
+.chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.chat-msg{max-width:75%;padding:12px 16px;border-radius:12px;font-size:14px;line-height:1.7;white-space:pre-wrap}
+.chat-msg.user{align-self:flex-end;background:var(--primary);color:#fff;border-bottom-right-radius:4px}
+.chat-msg.bot{align-self:flex-start;background:var(--card);border:1px solid var(--border);border-bottom-left-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.chat-input-area{display:flex;gap:10px;padding:14px 0}
+.chat-input-area input{flex:1;padding:10px 16px;border:1px solid var(--border);border-radius:24px;font-size:14px;outline:none}
+.chat-input-area input:focus{border-color:var(--primary)}
+.chat-examples{display:flex;flex-wrap:wrap;gap:8px;padding:8px 0}
+.chat-examples button{padding:5px 12px;border-radius:16px;border:1px solid var(--border);background:var(--card);font-size:12px;color:var(--text2);cursor:pointer;transition:all .2s}
+.chat-examples button:hover{border-color:var(--primary);color:var(--primary)}
+/* 数据集卡片 */
+.dataset-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dataset-card{background:var(--card);border:2px solid var(--border);border-radius:12px;padding:18px;cursor:pointer;transition:all .2s}
+.dataset-card:hover{border-color:var(--primary);box-shadow:0 4px 12px rgba(16,185,129,.15)}
+.dataset-card.selected{border-color:var(--primary);background:#f0fdf4}
+.dataset-card h4{font-size:15px;margin-bottom:6px}
+.dataset-card p{font-size:12px;color:var(--text2);line-height:1.5}
+.dataset-card .meta{margin-top:10px;font-size:11px;color:var(--primary)}
+/* 上传区 */
+.upload-zone{border:2px dashed var(--border);border-radius:12px;padding:40px;text-align:center;cursor:pointer;transition:all .2s}
+.upload-zone:hover{border-color:var(--primary);background:#f0fdf4}
+.upload-zone .icon{font-size:36px;color:var(--text2);margin-bottom:10px}
+.upload-zone p{color:var(--text2);font-size:14px}
+/* 两栏布局 */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.two-col{grid-template-columns:1fr}.sidebar{width:60px}.sidebar .logo h1,.sidebar .logo p,.sidebar nav a span,.sidebar .tier-badge,.sidebar .current-data{display:none}.main{margin-left:60px}}
+/* 进度条 */
+.progress-bar{height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden}
+.progress-bar .fill{height:100%;background:var(--primary);border-radius:4px;transition:width .5s}
+/* 提示 */
+.toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:8px;color:#fff;font-size:14px;z-index:9999;animation:slideIn .3s}
+.toast.success{background:var(--primary)}
+.toast.error{background:var(--danger)}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+/* 弹窗 */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
+.modal-overlay.show{display:flex}
+.modal-box{background:var(--card);border-radius:16px;max-width:520px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.2);position:relative;animation:modalIn .2s ease}
+@keyframes modalIn{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:none}}
+.modal-close{position:absolute;top:10px;right:14px;background:none;border:none;font-size:24px;color:var(--text2);cursor:pointer;line-height:1;padding:4px 8px;border-radius:6px}
+.modal-close:hover{color:var(--danger);background:#fef2f2}
+.modal-box h3{font-size:15px;font-weight:700;color:var(--primary-dark);padding:22px 28px 4px;display:flex;align-items:center;gap:8px;margin:0}
+.modal-desc{font-size:12px;color:var(--text2);padding:4px 28px 12px}
+.modal-body{padding:4px 28px;overflow-y:auto;font-size:13px;color:var(--text);line-height:2}
+.modal-body .item{display:flex;align-items:flex-start;gap:6px}
+.modal-body .item .ck{color:var(--primary);font-weight:700;flex-shrink:0}
+.modal-footer{padding:14px 28px 22px;text-align:center}
+.cleaning-card{cursor:pointer;transition:all .2s}
+.cleaning-card:hover{border-color:var(--primary-dark)!important;box-shadow:0 4px 12px rgba(16,185,129,.2);transform:translateY(-1px)}
+/* 加载 */
+.loading{text-align:center;padding:40px;color:var(--text2)}
+.loading .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty-state{text-align:center;padding:50px;color:var(--text2)}
+.empty-state .icon{font-size:40px;margin-bottom:10px;opacity:.4}
+/* 因素列表 */
+.factor-list .factor-item{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.factor-list .factor-item .name{width:110px;font-size:13px;text-align:right;flex-shrink:0}
+.factor-list .factor-item .bar{flex:1}
+.factor-list .factor-item .pct{width:50px;font-size:13px;font-weight:600;color:var(--primary-dark)}
+/* 补充上传建议卡片(温暖提示色调,区别于数据展示卡片) */
+.supplement-card{background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:16px}
+.supplement-card h3{font-size:15px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px;color:#92400e}
+.supplement-card h3 .dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.supplement-card .sub{font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6}
+.supp-item{background:#fff;border:1px solid #fef3c7;border-radius:8px;padding:12px 14px;margin-bottom:10px}
+.supp-item .name{font-size:14px;font-weight:600;color:#92400e;margin-bottom:4px}
+.supp-item .benefit{font-size:13px;color:var(--text);line-height:1.6;margin-bottom:6px}
+.supp-item .example{font-size:12px;color:var(--text2);background:#f9fafb;border:1px solid var(--border);border-radius:6px;padding:6px 10px;line-height:1.6}
+</style>
+</head>
+<body>
+<!-- 侧边栏 -->
+<aside class="sidebar">
+  <div class="logo">
+    <h1>🥬 生鲜店智能助手</h1>
+    <p>智能补货 · 预测 · 损耗控制</p>
+  </div>
+  <div class="current-data empty" id="currentDataCard">
+    <div class="cd-label">📦 当前数据</div>
+    <div class="cd-name" id="cdName">还没有选择数据</div>
+    <div class="cd-scale" id="cdScale">请到「数据管理」页面选择</div>
+  </div>
+  <nav>
+    <a href="#" data-page="data" class="active"><span class="icon">📁</span><span>数据管理</span></a>
+    <a href="#" data-page="dashboard"><span class="icon">📊</span><span>经营总览</span></a>
+    <a href="#" data-page="replenishment"><span class="icon">📦</span><span>进货建议</span></a>
+    <a href="#" data-page="forecast"><span class="icon">📈</span><span>销量预测</span></a>
+    <a href="#" data-page="causal"><span class="icon">🔬</span><span>销量因素分析</span></a>
+    <a href="#" data-page="simulation"><span class="icon">⚡</span><span>促销模拟</span></a>
+    <a href="#" data-page="waste"><span class="icon">🗑️</span><span>损耗分析</span></a>
+    <a href="#" data-page="chat"><span class="icon">💬</span><span>智能对话</span></a>
+  </nav>
+  <div class="tier-badge">数据版本:<span id="tierBadge">未加载</span></div>
+</aside>
+
+<!-- 主内容 -->
+<div class="main">
+  <!-- 数据管理页 -->
+  <div id="page-data" class="page active">
+    <div class="page-header"><h2>数据管理</h2><p>选择内置示例数据,或上传您自己的销售记录(CSV/Excel),系统自动识别内容</p></div>
+    <div class="card">
+      <h3><span class="dot"></span>内置示例数据集</h3>
+      <div class="dataset-grid" id="datasetGrid"></div>
+    </div>
+    <div class="card">
+      <h3><span class="dot"></span>上传自有数据</h3>
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        <div class="icon">📤</div>
+        <p>点击或拖拽文件到此处上传(可一次选多个)</p>
+        <p style="font-size:12px;margin-top:6px">支持 CSV / Excel / Parquet / JSON 格式,中英文表头均可自动识别;多个文件自动按日期+商品合并,缺的字段会智能推算补上</p>
+        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.parquet,.json,.jsonl" multiple style="display:none">
+      </div>
+    </div>
+    <!-- 分析进度条:上传/加载数据后显示,让商户知道后台分析到哪一步了 -->
+    <div class="card" id="preloadProgress" style="display:none">
+      <h3><span class="dot"></span>正在分析您的数据</h3>
+      <div id="preloadStepText" style="font-size:14px;font-weight:600;color:var(--primary-dark);margin-bottom:10px">准备中...</div>
+      <div class="progress-bar" style="height:10px;margin-bottom:14px"><div class="fill" id="preloadFill" style="width:0%"></div></div>
+      <div id="preloadSteps" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+    <div class="card" id="enrichCard" style="display:none">
+      <h3><span class="dot"></span>智能补齐当地影响因素</h3>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:10px">您的数据里缺天气、节假日信息?输入门店所在城市,智能体自动联网获取该城市的历史气温、降水量和法定节假日,补齐后参与分析(免费,无需任何密钥)</p>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="enrichCity" placeholder="输入城市名,如:北京、上海、广州" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px" onkeydown="if(event.key==='Enter')enrichFactors()">
+        <button class="btn btn-primary" onclick="enrichFactors()">🔍 自动补齐</button>
+      </div>
+      <div id="enrichResult" style="margin-top:10px"></div>
+    </div>
+    <div id="profileSection" style="display:none">
+      <div class="card">
+        <h3><span class="dot"></span>数据画像</h3>
+        <div id="profileContent"></div>
+      </div>
+      <div class="supplement-card" id="supplementCard" style="display:none">
+        <h3><span class="dot"></span>让分析更准：补充这些信息</h3>
+        <div class="sub">您现在的数据能用，但如果手头还有以下信息，补上后分析会更准、能做的分析更多</div>
+        <div id="supplementList"></div>
+        <input type="file" id="supplementFileInput" accept=".csv,.xlsx,.xls,.parquet,.json,.jsonl" multiple style="display:none">
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>数据预览(前20行)</h3>
+        <div style="overflow-x:auto" id="previewTable"></div>
+      </div>
+    </div>
+    <div class="card" id="historyCard">
+      <h3><span class="dot"></span>您上传过的数据</h3>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">下次打开不用重新上传，点一下就能接着用</p>
+      <div id="historyList"></div>
+    </div>
+  </div>
+
+  <!-- 仪表盘页 -->
+  <div id="page-dashboard" class="page">
+    <div class="page-header"><h2>经营总览</h2><p>一眼看清:卖了多少、有没有断货、扔了多少、今天该进什么</p></div>
+    <div class="period-bar">
+      <span class="period-label">看哪个时段:</span>
+      <button class="period-btn" data-period="today" onclick="switchDashboardPeriod('today')">今天</button>
+      <button class="period-btn active" data-period="week" onclick="switchDashboardPeriod('week')">最近7天</button>
+      <button class="period-btn" data-period="month" onclick="switchDashboardPeriod('month')">最近30天</button>
+      <button class="period-btn" data-period="all" onclick="switchDashboardPeriod('all')">全部</button>
+    </div>
+    <div id="dashboardContent"><div class="empty-state"><div class="icon">📊</div><p>请先加载数据</p></div></div>
+  </div>
+
+  <!-- 补货清单页 -->
+  <div id="page-replenishment" class="page">
+    <div class="page-header"><h2>进货建议</h2><p>根据真实销量和保质期,算出每样商品该进多少,既不缺货也不浪费</p></div>
+    <div id="evalSummary"></div>
+    <div id="replenishmentContent"><div class="empty-state"><div class="icon">📦</div><p>请先加载数据</p></div></div>
+  </div>
+
+  <!-- 需求预测页 -->
+  <div id="page-forecast" class="page">
+    <div class="page-header"><h2>销量预测</h2><p>根据近期销量、星期规律和促销、天气影响,预测未来每天能卖多少</p></div>
+    <div id="forecastContent"><div class="empty-state"><div class="icon">📈</div><p>请先加载数据</p></div></div>
+  </div>
+
+  <!-- 因果分析页 -->
+  <div id="page-causal" class="page">
+    <div class="page-header"><h2>销量因素分析</h2><p>看看促销、调价、节假日、天气这些因素,到底让每样商品多卖还是少卖</p></div>
+    <div id="causalContent"><div class="empty-state"><div class="icon">🔬</div><p>请先加载数据</p></div></div>
+  </div>
+
+  <!-- 策略模拟页 -->
+  <div id="page-simulation" class="page">
+    <div class="page-header"><h2>促销模拟</h2><p>试试看:如果打折、做促销、调价或者天气变化,每天能多卖还是少卖</p></div>
+    <div id="simulationContent"><div class="empty-state"><div class="icon">⚡</div><p>请先加载数据</p></div></div>
+  </div>
+
+  <!-- 损耗分析页 -->
+  <div id="page-waste" class="page">
+    <div class="page-header"><h2>损耗分析</h2><p>看看哪些商品扔得多、为什么扔,以及快过期的商品打几折最划算</p></div>
+    <div id="wasteContent"><div class="empty-state"><div class="icon">🗑️</div><p>请先加载数据</p></div></div>
+  </div>
+
+  <!-- 智能对话页 -->
+  <div id="page-chat" class="page">
+    <div class="page-header"><h2>智能对话</h2><p>像聊天一样问我:今天进什么货、为什么扔了那么多、做促销能多卖多少</p></div>
+    <div class="card chat-container">
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg bot">您好!我是您的生鲜店智能助手。您可以问我:今天该进什么货、为什么扔了那么多、做促销能多卖多少、明天能卖多少等问题。请先在「数据管理」页面加载数据。</div>
+      </div>
+      <div class="chat-examples" id="chatExamples"></div>
+      <div class="chat-input-area">
+        <input type="text" id="chatInput" placeholder="输入您的问题,如:明天生菜要补多少斤?" onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="btn btn-primary" onclick="sendChat()">发送</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ==================== 全局状态 ==================== */
+let currentTier = null;
+let skuList = [];
+let lastCleaningReport = []; /* 最近一次数据的整理明细,供弹窗展示 */
+const charts = {};
+
+/* ==================== 工具函数 ==================== */
+async function api(url, options) {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({detail: '请求失败'}));
+    throw new Error(err.detail || '请求失败');
+  }
+  return res.json();
+}
+function toast(msg, type) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type || 'success');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+function esc(s) { return String(s ?? '').replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>'); }
+/* ==================== 整理详情弹窗 ==================== */
+function showCleaningModal() {
+  const body = document.getElementById('cleaningModalBody');
+  if (!body) return;
+  body.innerHTML = lastCleaningReport.map(r =>
+    `<div class="item"><span class="ck">✓</span><span>${esc(r)}</span></div>`
+  ).join('');
+  document.getElementById('cleaningModal').classList.add('show');
+}
+function closeCleaningModal() {
+  const m = document.getElementById('cleaningModal');
+  if (m) m.classList.remove('show');
+}
+function fmt(n, d) { return Number(n ?? 0).toLocaleString('zh-CN', {maximumFractionDigits: d ?? 1}); }
+function riskBadge(level) {
+  const cls = level === '高' ? 'red' : level === '中' ? 'yellow' : 'green';
+  return `<span class="badge ${cls}">${level}</span>`;
+}
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+/* 动态生成N个高区分度颜色(黄金角HSL法),避免饼图因素过多时颜色重复 */
+function genColors(n) {
+  const colors = [];
+  for (let i = 0; i < n; i++) {
+    const h = Math.round((i * 137.508) % 360);
+    colors.push(`hsl(${h}, 65%, 55%)`);
+  }
+  return colors;
+}
+
+/* ==================== 页面导航 ==================== */
+const loadedModules = new Set(); /* 已加载的模块,切换回来不重新请求 */
+let lastPage = null;
+function invalidateModules() { loadedModules.clear(); } /* 数据变更时调用,强制所有模块重新加载 */
+document.querySelectorAll('.sidebar nav a').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    document.querySelectorAll('.sidebar nav a').forEach(x => x.classList.remove('active'));
+    a.classList.add('active');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const page = a.dataset.page;
+    document.getElementById('page-' + page).classList.add('active');
+    loadPage(page);
+  });
+});
+function loadPage(page) {
+  if (!currentTier && page !== 'data') {
+    toast('请先在数据管理页面加载数据', 'error');
+    return;
+  }
+  /* 已加载过的模块直接展示,不重新分析;重复点当前页=手动刷新 */
+  if (loadedModules.has(page) && page !== lastPage) { lastPage = page; return; }
+  lastPage = page;
+  loadedModules.add(page);
+  const loaders = {dashboard: loadDashboard, replenishment: loadReplenishment, forecast: initForecast, causal: loadCausal, simulation: initSimulation, waste: loadWaste, chat: loadChatExamples};
+  if (loaders[page]) loaders[page]();
+}
+
+/* ==================== 数据管理 ==================== */
+async function loadDatasets() {
+  try {
+    const data = await api('/api/data/builtin');
+    const grid = document.getElementById('datasetGrid');
+    grid.innerHTML = data.datasets.map(d => `
+      <div class="dataset-card" onclick="loadDataset('${d.id}')" id="ds-${d.id}">
+        <h4>${esc(d.name)}</h4>
+        <p>${esc(d.desc)}</p>
+        <div class="meta">${fmt(d.size_kb||0,1)}KB · ${d.available ? '✓ 可用' : '未生成'}</div>
+      </div>`).join('');
+    try {
+      const status = await api('/api/data/status');
+      if (status.loaded || status.is_loaded) { currentTier = status.tier; updateTierBadge(status.tier, status.dataset_name || status.source); showProfile(); resumePreloadIfNeeded(); }
+    } catch (e) {}
+    loadHistory(); /* 加载上传历史记录 */
+  } catch (e) { toast('加载数据集列表失败: ' + e.message, 'error'); }
+}
+async function loadDataset(id) {
+  try {
+    const res = await api('/api/data/builtin/' + id, {method: 'POST'});
+    lastValidation = res.validation || null;
+    toast(res.message || '已加载');
+    currentTier = res.tier;
+    updateTierBadge(res.tier, res.tier_label || res.message);
+    document.querySelectorAll('.dataset-card').forEach(c => c.classList.remove('selected'));
+    const card = document.getElementById('ds-' + id);
+    if (card) card.classList.add('selected');
+    invalidateModules(); /* 数据变了,各模块需重新分析 */
+    showProfile();
+    loadDatasets();
+    startPreloadPolling(); /* 显示后台分析进度条 */
+  } catch (e) { toast(e.message, 'error'); }
+}
+function updateTierBadge(tier, name) {
+  const tierNames = {basic: '基础版', advanced: '进阶版', full: '完整版'};
+  document.getElementById('tierBadge').textContent = tierNames[tier] || tier;
+  document.getElementById('tierBadge').title = name || '';
+}
+/* 更新侧边栏"当前数据"卡片:显示当前数据名称与规模,未加载时提示去数据管理页选择 */
+function updateCurrentDataCard(st, p) {
+  const card = document.getElementById('currentDataCard');
+  const nameEl = document.getElementById('cdName');
+  const scaleEl = document.getElementById('cdScale');
+  if (!card || !nameEl || !scaleEl) return;
+  const loaded = (st && (st.loaded || st.is_loaded)) || !!p;
+  if (!loaded) {
+    card.classList.add('empty');
+    nameEl.textContent = '还没有选择数据';
+    scaleEl.textContent = '请到「数据管理」页面选择';
+    return;
+  }
+  card.classList.remove('empty');
+  /* 名称:内置数据显示"完整版示例数据"等友好说法,上传数据显示文件名 */
+  const sourceType = (st && st.data_source_type) || (p && p.data_source_type) || 'builtin';
+  const tierNames = {basic: '基础版', advanced: '进阶版', full: '完整版'};
+  const tierLabel = (st && st.tier_label) || (p && p.tier ? (tierNames[p.tier] || '') : '') || '';
+  const rawSource = (st && st.source) || (p && p.source) || '';
+  const name = sourceType === 'custom' ? (rawSource || '您上传的数据') : (tierLabel ? tierLabel + '示例数据' : '内置示例数据');
+  nameEl.textContent = name;
+  nameEl.title = rawSource;
+  /* 规模:优先"天数 × 商品数",拿不到就退回"记录数 × 商品数" */
+  let scale = '';
+  const rows = (p && p.rows) || (st && st.rows) || 0;
+  const skus = (p && p.n_skus) || (st && st.n_skus) || 0;
+  const days = p ? calcDataDays(p.date_range) : 0;
+  if (days && skus) scale = days + '天 × ' + fmt(skus, 0) + '个商品';
+  else if (rows && skus) scale = fmt(rows, 0) + '条记录 × ' + fmt(skus, 0) + '个商品';
+  else if (rows) scale = fmt(rows, 0) + '条记录';
+  if (p && p.n_stores && p.n_stores > 1) scale += ' · ' + fmt(p.n_stores, 0) + '家门店';
+  scaleEl.textContent = scale;
+}
+/* 从日期范围推算天数(含首尾两天),推算失败返回0 */
+function calcDataDays(dr) {
+  if (!dr) return 0;
+  let start = dr.start, end = dr.end;
+  if (typeof dr === 'string') { const parts = dr.split('~'); start = parts[0] && parts[0].trim(); end = parts[1] && parts[1].trim(); }
+  if (!start || !end) return 0;
+  const s = new Date(start), e = new Date(end);
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
+  return Math.max(1, Math.round((e - s) / 86400000) + 1);
+}
+let lastValidation = null; /* 上传/加载数据时的质量检查结果,供数据画像展示 */
+async function showProfile() {
+  const sec = document.getElementById('profileSection');
+  sec.style.display = 'block';
+  document.getElementById('enrichCard').style.display = 'block';
+  try {
+    const [p, st] = await Promise.all([
+      api('/api/data/profile'),
+      api('/api/data/status').catch(() => null)
+    ]);
+    const tierNames = {basic: '基础版', advanced: '进阶版', full: '完整版'};
+    const feat = p.unlocked_features || [];
+    const sourceType = (st && st.data_source_type) || p.data_source_type || 'builtin';
+    const sourceLabel = sourceType === 'custom' ? '您上传的数据' : '内置示例数据';
+    updateCurrentDataCard(st, p); /* 同步刷新侧边栏"当前数据"卡片(所有数据加载/切换/上传后都会走到这里) */
+    let html = '';
+    /* 数据质量提醒:展示上传/加载时发现的问题 */
+    const val = lastValidation || p.validation || null;
+    if (val && val.warnings && val.warnings.length) {
+      html += `<div class="card" style="margin-bottom:12px;background:#fffbeb;border:1px solid var(--warn)">
+        <h3 style="font-size:13px;color:#92400e;margin-bottom:10px"><span class="dot" style="background:var(--warn)"></span>数据质量提醒</h3>
+        ${val.quality_score != null ? `<div style="font-size:14px;font-weight:600;color:#92400e;margin-bottom:8px">数据质量评分:${esc(String(val.quality_score))}分</div>` : ''}
+        <div style="font-size:13px;color:#78350f;line-height:1.9">${val.warnings.map(w => '<div>⚠️ ' + esc(w) + '</div>').join('')}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:8px">这些问题不会影响使用,但了解一下有助于您改进数据</div>
+      </div>`;
+    }
+    html += `<div class="stat-grid">
+      <div class="stat-card"><div class="label">数据版本</div><div class="value" style="font-size:18px">${tierNames[p.tier]||p.tier}</div><div class="sub">${esc(sourceLabel)}</div></div>
+      <div class="stat-card"><div class="label">数据行数</div><div class="value">${fmt(p.rows,0)}</div></div>
+      <div class="stat-card"><div class="label">SKU数量</div><div class="value">${fmt(p.n_skus,0)}</div></div>
+      ${p.n_stores && p.n_stores > 0 ? `<div class="stat-card"><div class="label">门店数量</div><div class="value">${fmt(p.n_stores,0)}</div></div>` : ''}
+      <div class="stat-card info"><div class="label">日期范围</div><div class="value" style="font-size:14px">${p.date_range && p.date_range.start ? esc(p.date_range.start) + ' ~ ' + esc(p.date_range.end) : esc(p.date_range)}</div></div>
+    </div>`;
+    html += '<div class="card" style="margin-bottom:12px"><h3 style="font-size:13px"><span class="dot"></span>已解锁功能</h3><div style="display:flex;flex-wrap:wrap;gap:6px">';
+    feat.forEach(f => html += `<span class="badge green">${esc(f)}</span>`);
+    html += '</div></div>';
+    /* 列名识别结果:展示每个原始列名被识别为哪个标准字段 */
+    const colMap = p.column_mapping || {};
+    const unmatched = p.unmatched_columns || [];
+    const colMapEntries = Object.entries(colMap);
+    if (colMapEntries.length) {
+      const fieldLabels = {date:'日期', store_id:'门店编号', sku_id:'商品编号', sku_name:'商品名称', category:'商品分类', sales:'销量', demand:'需求', price:'售价', base_price:'标准售价', is_promo:'是否促销', discount:'折扣', temperature:'温度', precipitation:'降水量', is_weekend:'是否周末', is_holiday:'是否节假日', holiday_name:'节假日名称', inventory:'库存', in_transit:'在途库存', stockout:'是否缺货', waste_qty:'损耗数量', near_expiry:'临期数量', near_expiry_price:'临期售价', cost:'成本', shelf_life:'保质期', lead_time:'补货周期', unit:'单位', gross_margin:'毛利', stockout_loss:'缺货损失'};
+      const emptyCols = new Set(p.empty_columns || []);
+      const mapHtml = colMapEntries.map(([orig, std]) => {
+        if (std) {
+          const isEmpty = emptyCols.has(orig) || emptyCols.has(std);
+          return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:13px"><span style="color:${isEmpty ? 'var(--warn)' : 'var(--primary-dark)'};font-weight:700">${isEmpty ? '⚠' : '✓'}</span><span>${esc(orig)}</span><span style="color:var(--text2)">→</span><span style="color:${isEmpty ? 'var(--warn)' : 'var(--primary-dark)'};font-weight:600">${esc(fieldLabels[std] || std)}${isEmpty ? '（这列没有数据）' : ''}</span></div>`;
+        }
+        return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:13px"><span style="color:var(--warn);font-weight:700">?</span><span>${esc(orig)}</span><span style="color:var(--text2)">→</span><select data-column="${esc(orig)}" onchange="remapColumn(this.dataset.column,this.value)" style="font-size:12px;padding:2px 6px;border:1px solid var(--warn);border-radius:4px;background:#fffbeb;color:#92400e;max-width:170px;cursor:pointer"><option value="">请选择这列是什么</option>${Object.entries(fieldLabels).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}<option value="__none__">这列不重要,不使用</option></select></div>`;
+      }).join('');
+      /* 数据分析能力:让商户知道当前数据能做什么、缺什么 */
+      const tierVal = p.tier || 'basic';
+      const tierLab = p.tier_label || '基础版';
+      const allMods = [
+        {name:'经营总览', ok:true},
+        {name:'进货建议', ok:true},
+        {name:'销量预测', ok:true},
+        {name:'销量因素分析', ok: tierVal !== 'basic'},
+        {name:'促销模拟', ok: tierVal !== 'basic'},
+        {name:'损耗分析', ok:true},
+        {name:'智能对话', ok:true},
+      ];
+      const lockedMods = allMods.filter(m => !m.ok);
+      const okMods = allMods.filter(m => m.ok);
+      const lockHint = lockedMods.length
+        ? (unmatched.length
+            ? `🔒 ${lockedMods.map(m=>m.name).join('、')} 暂不可用 — 需要数据里包含<b>售价、促销、天气</b>等信息。如果您的表格里有这些信息但上方显示?号,请在下拉框中选择对应含义,即可解锁。`
+            : `🔒 ${lockedMods.map(m=>m.name).join('、')} 暂不可用 — 需要数据里包含<b>售价、促销、天气</b>等信息。您可以上传包含这些信息的数据,或在数据管理页面选择「进阶版示例数据」体验。`)
+        : '';
+      const capabilityHtml = `<div style="margin-top:10px;padding:10px 12px;background:${tierVal==='basic'?'#fffbeb':'#f0fdf4'};border:1px solid ${tierVal==='basic'?'var(--warn)':'var(--primary)'};border-radius:8px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px">您的数据能做哪些分析</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px">数据级别：${tierLab}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;${lockedMods.length?'margin-bottom:8px':''}">${okMods.map(m=>`<span class="badge green">✓ ${m.name}</span>`).join('')}</div>
+        ${lockHint ? `<div style="font-size:12px;color:#92400e;line-height:1.7">${lockHint}</div>` : ''}
+      </div>`;
+      html += `<div class="card" style="margin-bottom:12px"><h3 style="font-size:13px"><span class="dot"></span>列名识别结果</h3>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">系统自动读懂了您表格里的列名,对照如下</div>
+        ${mapHtml}
+        ${unmatched.length ? `<div style="margin-top:10px;padding:8px 10px;background:#fffbeb;border:1px solid var(--warn);border-radius:8px;font-size:12px;color:#92400e;line-height:1.7">带 <span style="font-weight:700">?</span> 的列系统没认出来,请点下拉框告诉系统这列代表什么,选好后会自动重新分析。如果这列不影响卖货,可选"不使用"。</div>` : ''}
+        ${capabilityHtml}
+      </div>`;
+    }
+    /* 系统帮您整理了数据:清洗报告(默认只显示摘要,点击弹窗查看完整内容) */
+    const cleaningReport = p.cleaning_report || [];
+    if (cleaningReport.length) {
+      lastCleaningReport = cleaningReport;
+      html += `<div class="card cleaning-card" style="margin-bottom:12px;background:#f0fdf4;border:1px solid var(--primary)" onclick="showCleaningModal()">
+        <h3 style="font-size:13px;color:var(--primary-dark);margin-bottom:8px"><span class="dot" style="background:var(--primary)"></span>系统帮您整理了数据</h3>
+        <div style="font-size:12px;color:var(--text2)">系统帮您处理了 ${cleaningReport.length} 个问题，点击查看详情</div>
+      </div>`;
+    }
+    /* 系统帮您智能推算补上的信息 */
+    const inferred = p.inferred_fields;
+    let inferredItems = [];
+    if (inferred && typeof inferred === 'object' && !Array.isArray(inferred)) {
+      Object.entries(inferred).forEach(([k, v]) => inferredItems.push(esc(k) + (v ? '(' + esc(String(v)) + ')' : '')));
+    } else if (Array.isArray(inferred)) {
+      inferred.forEach(item => {
+        if (item && typeof item === 'object') { Object.entries(item).forEach(([k, v]) => inferredItems.push(esc(k) + (v ? '(' + esc(String(v)) + ')' : ''))); }
+        else { inferredItems.push(esc(String(item))); }
+      });
+    }
+    if (inferredItems.length) {
+      html += `<div class="card" style="margin-bottom:12px"><h3 style="font-size:13px"><span class="dot"></span>数据质量检查</h3>
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">系统帮您智能推算补上的信息</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">您的数据里缺这些信息,系统自动按行业经验推算补上了,分析不受影响</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${inferredItems.map(it => `<span class="badge blue">${it}</span>`).join('')}</div>
+      </div>`;
+    }
+    if (p.missing_rates && Object.keys(p.missing_rates).length) {
+      html += '<div class="card" style="margin-bottom:0"><h3 style="font-size:13px"><span class="dot"></span>数据缺失情况</h3><div class="factor-list">';
+      Object.entries(p.missing_rates).forEach(([k,v]) => {
+        html += `<div class="factor-item"><span class="name">${esc(k)}</span><div class="bar"><div class="progress-bar"><div class="fill" style="width:${Math.min(100, v*100)}%;background:${v>0.3?'var(--danger)':v>0.1?'var(--warn)':'var(--primary)'}"></div></div></div><span class="pct">${(v*100).toFixed(1)}%</span></div>`;
+      });
+      html += '</div></div>';
+    }
+    document.getElementById('profileContent').innerHTML = html;
+    /* 数据预览:独立捕获错误,预览失败不影响画像展示,且给用户明确提示 */
+    try {
+      const pv = await api('/api/data/preview?rows=20');
+      if (pv.rows && pv.rows.length) {
+        const cols = pv.columns || Object.keys(pv.rows[0]);
+        let th = cols.map(c => `<th>${esc(c)}</th>`).join('');
+        let trs = pv.rows.map(r => '<tr>' + cols.map(c => `<td>${esc(r[c])}</td>`).join('') + '</tr>').join('');
+        document.getElementById('previewTable').innerHTML = `<table><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`;
+      } else {
+        document.getElementById('previewTable').innerHTML = '<p style="color:var(--text2);font-size:13px">暂无预览数据</p>';
+      }
+    } catch (pe) {
+      document.getElementById('previewTable').innerHTML = '<p style="color:var(--danger);font-size:13px">数据预览加载失败: ' + esc(pe.message) + '</p>';
+    }
+    /* 数据画像加载完,刷新补充上传建议(数据更全时卡片会自动隐藏) */
+    loadSupplementSuggestions();
+  } catch (e) { toast('获取数据画像失败: ' + e.message, 'error'); }
+}
+/* 商户手动指定未识别列的含义 */
+async function remapColumn(column, value) {
+  if (!value) return;
+  const field = value === '__none__' ? '' : value;
+  try {
+    const res = await api('/api/data/remap-column', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({column, field})});
+    toast(res.message || '已更新');
+    invalidateModules(); /* 列含义变了,各模块需重新分析 */
+    showProfile();
+    startPreloadPolling(); /* 显示后台分析进度条 */
+  } catch (e) { toast('更新失败: ' + e.message, 'error'); }
+}
+/* 上传(支持多文件) */
+document.getElementById('fileInput').addEventListener('change', async function() {
+  const files = this.files;
+  if (!files || !files.length) return;
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f);
+  try {
+    const res = await api('/api/data/upload', {method: 'POST', body: fd});
+    lastValidation = res.validation || null;
+    toast(res.message || '上传成功');
+    currentTier = res.tier;
+    updateTierBadge(res.tier, res.tier_label || '');
+    invalidateModules(); /* 数据变了,各模块需重新分析 */
+    showProfile();
+    loadHistory(); /* 刷新上传历史记录 */
+    startPreloadPolling(); /* 显示后台分析进度条 */
+  } catch (e) { toast(e.message, 'error'); }
+  this.value = '';
+});
+/* 拖拽上传(支持多文件) */
+const uz = document.getElementById('uploadZone');
+uz.addEventListener('dragover', e => { e.preventDefault(); uz.style.borderColor = 'var(--primary)'; });
+uz.addEventListener('dragleave', () => { uz.style.borderColor = ''; });
+uz.addEventListener('drop', e => {
+  e.preventDefault(); uz.style.borderColor = '';
+  const files = e.dataTransfer.files;
+  if (files && files.length) { document.getElementById('fileInput').files = files; document.getElementById('fileInput').dispatchEvent(new Event('change')); }
+});
+
+/* ==================== 分析进度条 ==================== */
+/* 5个分析步骤(面向商家的大白话,与后端文案一致) */
+const PRELOAD_STEPS = [
+  '把缺货那几天没统计到的需求补回来',
+  '分析促销、节假日、天气对销量的影响',
+  '算每样商品该进多少',
+  '预测未来一周能卖多少',
+  '对比不同进货策略的损失',
+];
+let preloadTimer = null; /* 轮询定时器 */
+
+/* 渲染5个步骤圆点:已完成的打勾,当前步骤高亮 */
+function renderPreloadSteps(currentIdx, done) {
+  const el = document.getElementById('preloadSteps');
+  if (!el) return;
+  el.innerHTML = PRELOAD_STEPS.map((text, i) => {
+    const idx = i + 1;
+    const isDone = done || idx < currentIdx;
+    const isCurrent = !done && idx === currentIdx;
+    const dotStyle = isDone
+      ? 'background:var(--primary);color:#fff;border-color:var(--primary)'
+      : isCurrent
+        ? 'background:#fff;color:var(--primary-dark);border-color:var(--primary);box-shadow:0 0 0 3px rgba(16,185,129,.15)'
+        : 'background:#fff;color:var(--text2);border-color:var(--border)';
+    return `<div style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid ${isCurrent ? 'var(--primary)' : 'var(--border)'};background:${isCurrent ? 'var(--primary-bg)' : 'transparent'};font-size:12px;${isCurrent ? 'font-weight:600;color:var(--primary-dark)' : isDone ? 'color:var(--text1)' : 'color:var(--text2)'}">
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--border);font-size:11px;flex-shrink:0;${dotStyle}">${isDone ? '✓' : idx}</span>
+      <span>${text}</span>
+    </div>`;
+  }).join('');
+}
+
+/* 启动进度轮询:上传/加载内置数据/重载历史记录后调用 */
+function startPreloadPolling() {
+  stopPreloadPolling(); /* 防重复:先清掉旧轮询 */
+  const box = document.getElementById('preloadProgress');
+  const fill = document.getElementById('preloadFill');
+  const stepText = document.getElementById('preloadStepText');
+  if (!box || !fill || !stepText) return;
+  box.style.display = 'block';
+  fill.style.width = '0%';
+  stepText.textContent = '准备中...';
+  renderPreloadSteps(0, false);
+
+  preloadTimer = setInterval(async () => {
+    try {
+      const st = await api('/api/data/preload-status');
+      if (st.done) {
+        /* 分析完成:进度满格,2秒后自动隐藏 */
+        stopPreloadPolling();
+        fill.style.width = '100%';
+        stepText.textContent = '分析完成，可以查看各页面结果了';
+        renderPreloadSteps(PRELOAD_STEPS.length, true);
+        setTimeout(() => { box.style.display = 'none'; }, 2000);
+        return;
+      }
+      const idx = st.step_index || 0;
+      const total = st.total_steps || 5;
+      fill.style.width = (idx / total * 100) + '%';
+      stepText.textContent = st.step || '准备中...';
+      renderPreloadSteps(idx, false);
+    } catch (e) { /* 轮询失败不报错,下次继续 */ }
+  }, 1000);
+}
+
+/* 停止进度轮询 */
+function stopPreloadPolling() {
+  if (preloadTimer) { clearInterval(preloadTimer); preloadTimer = null; }
+}
+
+/* 页面加载/刷新后,如果后台分析还在进行中,恢复进度条显示 */
+async function resumePreloadIfNeeded() {
+  try {
+    const st = await api('/api/data/preload-status');
+    if (!st.done) startPreloadPolling();
+  } catch (e) { /* 查询失败不报错 */ }
+}
+
+/* ==================== 补充上传建议 ==================== */
+async function loadSupplementSuggestions() {
+  const card = document.getElementById('supplementCard');
+  const list = document.getElementById('supplementList');
+  if (!card || !list) return;
+  try {
+    const data = await api('/api/data/suggest-supplement');
+    if (!data.has_suggestions || !data.suggestions || !data.suggestions.length) {
+      card.style.display = 'none';
+      return;
+    }
+    list.innerHTML = data.suggestions.map(s => `
+      <div class="supp-item">
+        <div class="name">📌 ${esc(s.label)}</div>
+        <div class="benefit">补上后${esc(s.benefit)}</div>
+        <div class="example">${esc(s.example)}</div>
+      </div>`).join('') + `
+      <button class="btn btn-primary" onclick="document.getElementById('supplementFileInput').click()">📎 选择文件补充上传</button>`;
+    card.style.display = 'block';
+  } catch (e) {
+    /* 未加载数据或接口异常时,静默隐藏卡片,不打扰商户 */
+    card.style.display = 'none';
+  }
+}
+/* 补充上传:把商户手头还有的信息合并进现有数据 */
+document.getElementById('supplementFileInput').addEventListener('change', async function() {
+  const files = this.files;
+  if (!files || !files.length) return;
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f);
+  try {
+    const res = await api('/api/data/supplement', {method: 'POST', body: fd});
+    toast(res.message || '补充成功');
+    currentTier = res.tier;
+    updateTierBadge(res.tier, res.tier_label || '');
+    invalidateModules(); /* 数据变了,各模块需重新分析 */
+    showProfile(); /* 画像刷新时会自动重新拉取补充建议 */
+    loadHistory(); /* 刷新上传历史记录 */
+    startPreloadPolling(); /* 显示后台分析进度条 */
+  } catch (e) { toast(e.message, 'error'); }
+  this.value = '';
+});
+
+/* ==================== 上传历史记录 ==================== */
+function formatHistoryTime(t) {
+  if (!t) return '';
+  const d = new Date(t);
+  if (isNaN(d.getTime())) return esc(String(t));
+  const pad = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+async function loadHistory() {
+  const list = document.getElementById('historyList');
+  if (!list) return;
+  try {
+    const data = await api('/api/data/history');
+    const items = data.items || [];
+    if (!items.length) {
+      list.innerHTML = '<p style="font-size:13px;color:var(--text2)">您还没有上传过数据。上传您的销售记录，系统会自动帮您分析</p>';
+      return;
+    }
+    /* 前端兜底去重:同名文件只显示第一条(后端已按上传时间倒序,第一条即最新) */
+    const seenNames = new Set();
+    const deduped = items.filter(it => {
+      const fn = it.filename || '';
+      if (seenNames.has(fn)) return false;
+      seenNames.add(fn);
+      return true;
+    });
+    const tierBadgeCls = {basic: 'gray', advanced: 'blue', full: 'green'};
+    const tierNames = {basic: '基础版', advanced: '进阶版', full: '完整版'};
+    list.innerHTML = deduped.map(it => {
+      const t = it.tier || 'basic';
+      const cls = tierBadgeCls[t] || 'gray';
+      const label = it.tier_label || tierNames[t] || t;
+      return `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.filename)}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px">${formatHistoryTime(it.uploaded_at)} · ${fmt(it.rows, 0)}行 × ${fmt(it.cols, 0)}列</div>
+        </div>
+        <span class="badge ${cls}">${esc(label)}</span>
+        <button class="btn btn-primary btn-sm" onclick="reloadHistory('${it.id}')">继续用这个</button>
+        <a href="javascript:void(0)" onclick="deleteHistory('${it.id}')" style="font-size:12px;color:var(--text2)">删除</a>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = ''; /* 历史记录加载失败不影响其他功能 */
+  }
+}
+async function reloadHistory(id) {
+  try {
+    const res = await api('/api/data/history/' + id + '/reload', {method: 'POST'});
+    lastValidation = res.validation || null;
+    toast(res.message || '已加载');
+    currentTier = res.tier;
+    updateTierBadge(res.tier, res.tier_label || res.message);
+    invalidateModules(); /* 数据变了,各模块需重新分析 */
+    showProfile();
+    loadHistory();
+    startPreloadPolling(); /* 显示后台分析进度条 */
+  } catch (e) { toast(e.message, 'error'); }
+}
+async function deleteHistory(id) {
+  if (!confirm('确定删除这条上传记录吗？')) return;
+  try {
+    const res = await api('/api/data/history/' + id, {method: 'DELETE'});
+    toast(res.message || '已删除');
+    loadHistory();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* 智能补齐当地影响因素 */
+async function enrichFactors() {
+  const city = document.getElementById('enrichCity').value.trim();
+  if (!city) { toast('请输入门店所在城市', 'error'); return; }
+  const el = document.getElementById('enrichResult');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p>正在获取「' + esc(city) + '」的天气和节假日数据...</p></div>';
+  try {
+    const res = await api('/api/data/enrich', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({city: city})
+    });
+    const cols = (res.added_columns || []).map(c => '「' + esc(c) + '」').join('、');
+    el.innerHTML = '<div class="stat-card" style="background:var(--primary-bg);border:1px solid var(--primary)"><div class="label" style="color:var(--primary-dark)">✓ 补齐成功</div><div style="font-size:14px;margin-top:6px">' + esc(res.message) + '</div>' + (cols ? '<div style="font-size:12px;color:var(--text2);margin-top:4px">新增列:' + cols + '</div>' : '') + '</div>';
+    toast(res.message || '补齐成功');
+    invalidateModules(); /* 补齐了新因素,各模块需重新分析 */
+    showProfile();
+    startPreloadPolling(); /* 显示后台分析进度条 */
+  } catch (e) {
+    el.innerHTML = '<div class="stat-card" style="background:#fef2f2;border:1px solid var(--danger)"><div class="label" style="color:var(--danger)">✗ 补齐失败</div><div style="font-size:14px;margin-top:6px">' + esc(e.message) + '</div></div>';
+  }
+}
+
+/* ==================== 仪表盘 ==================== */
+let currentDashboardPeriod = 'week';
+function switchDashboardPeriod(period) {
+  currentDashboardPeriod = period;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('active', b.dataset.period === period));
+  loadDashboard();
+}
+async function loadDashboard() {
+  const el = document.getElementById('dashboardContent');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p>正在计算分析结果...</p></div>';
+  try {
+    const d = await api('/api/dashboard/summary?period=' + currentDashboardPeriod);
+    const rec = d.recovery_summary || {};
+    const ss = rec.stockout_stats || {};
+    const cau = d.causal_summary || {};
+    const was = d.waste_overview || {};
+    const rep = d.replenishment_summary || {};
+    let html = `<div class="stat-grid">
+      <div class="stat-card"><div class="label">在售商品</div><div class="value">${fmt(d.n_skus,0)}<span style="font-size:13px;font-weight:400"> 种</span></div><div class="sub">目前有卖的商品</div></div>
+      <div class="stat-card"><div class="label">日均销量</div><div class="value">${fmt(d.avg_daily_sales,0)}<span style="font-size:13px;font-weight:400"> 件</span></div><div class="sub">${d.period_label||'最近7天'}平均每天卖出</div></div>
+      <div class="stat-card warn"><div class="label">断货天数占比</div><div class="value">${fmt(ss.stockout_rate_pct||0)}%</div><div class="sub">${fmt(ss.affected_skus||0,0)}个商品曾卖断货</div></div>
+      <div class="stat-card info"><div class="label">真实需求上调</div><div class="value">${fmt(rec.avg_uplift_pct||0)}%</div><div class="sub">断货让销量被低估,已修正</div></div>
+    </div>`;
+    /* 品类分布 */
+    if (d.category_dist && Object.keys(d.category_dist).length) {
+      html += '<div class="two-col"><div class="card"><h3><span class="dot"></span>品类销量分布</h3><div class="chart-box"><canvas id="chartCatDist"></canvas></div></div>';
+      html += `<div class="card"><h3><span class="dot"></span>断货修正情况</h3>
+        <div class="stat-grid" style="grid-template-columns:1fr 1fr">
+          <div class="stat-card"><div class="label">断货修正天数</div><div class="value" style="font-size:20px">${fmt(rec.corrected_records||0,0)}<span style="font-size:12px;font-weight:400"> 天</span></div><div class="sub">卖断货导致销量被低估的天数</div></div>
+          <div class="stat-card info"><div class="label">被低估的销量</div><div class="value" style="font-size:20px">${fmt(rec.total_recovered_demand||0,0)}<span style="font-size:12px;font-weight:400"> 件</span></div><div class="sub">已经补回,按真实需求算</div></div>
+        </div></div></div>`;
+    }
+    /* 因果 + 损耗 + 补货 */
+    html += '<div class="two-col">';
+    if (cau && cau.avg_promo_uplift_pct !== undefined) {
+      html += `<div class="card"><h3><span class="dot"></span>什么因素影响销量</h3>
+        <div class="stat-grid" style="grid-template-columns:1fr 1fr">
+          <div class="stat-card"><div class="label">做促销平均多卖</div><div class="value" style="font-size:20px">${fmt(cau.avg_promo_uplift_pct)}%</div><div class="sub">排除其他因素后的真实效果</div></div>
+          <div class="stat-card warn"><div class="label">价格敏感度</div><div class="value" style="font-size:20px">${fmt(cau.avg_price_elasticity,2)}</div><div class="sub">数字越大,顾客越在乎价格</div></div>
+          <div class="stat-card info"><div class="label">节假日平均多卖</div><div class="value" style="font-size:20px">${fmt(cau.avg_holiday_uplift_pct||0)}%</div></div>
+          <div class="stat-card"><div class="label">下大雨的影响</div><div class="value" style="font-size:20px">${fmt(cau.avg_rain_impact_pct||0)}%</div><div class="sub">负数表示下雨天卖得少</div></div>
+        </div></div>`;
+    } else {
+      html += '<div class="card"><h3><span class="dot"></span>什么因素影响销量</h3><p style="color:var(--text2)">需要进阶版以上数据(包含价格、促销、天气信息)才能分析</p></div>';
+    }
+    if (was && was.overall_waste_rate_pct !== undefined) {
+      html += `<div class="card"><h3><span class="dot"></span>损耗分析</h3>
+        <div class="stat-grid" style="grid-template-columns:1fr 1fr">
+          <div class="stat-card danger"><div class="label">损耗占比</div><div class="value" style="font-size:20px">${fmt(was.overall_waste_rate_pct||0)}%</div><div class="sub">进货中最终被扔掉的比例</div></div>
+          <div class="stat-card warn"><div class="label">有损耗的商品</div><div class="value" style="font-size:20px">${fmt(was.n_skus_with_waste||0,0)}<span style="font-size:12px;font-weight:400"> 种</span></div></div>
+        </div></div>`;
+    } else {
+      html += '<div class="card"><h3><span class="dot"></span>损耗分析</h3><p style="color:var(--text2)">需要完整版数据(包含损耗、成本信息)才能分析</p></div>';
+    }
+    html += '</div>';
+    /* 补货摘要 */
+    if (rep && rep.total_reorder_qty !== undefined) {
+      html += `<div class="card"><h3><span class="dot"></span>今天该进多少货</h3>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="label">今天总共要进</div><div class="value">${fmt(rep.total_reorder_qty,0)}<span style="font-size:13px;font-weight:400"> 件</span></div><div class="sub">各商品单位不同,详见进货单</div></div>
+          <div class="stat-card warn"><div class="label">需要进货的商品</div><div class="value">${fmt(rep.n_skus_to_reorder||0,0)}<span style="font-size:13px;font-weight:400"> 种</span></div></div>
+          <div class="stat-card danger"><div class="label">容易过期的商品</div><div class="value">${fmt(rep.high_waste_risk_count||0,0)}<span style="font-size:13px;font-weight:400"> 种</span></div><div class="sub">进货要控制量</div></div>
+        </div></div>`;
+    }
+    el.innerHTML = html;
+    /* 绘图 */
+    if (d.category_dist) {
+      destroyChart('catDist');
+      charts.catDist = new Chart(document.getElementById('chartCatDist'), {
+        type: 'doughnut',
+        data: {labels: Object.keys(d.category_dist), datasets: [{data: Object.values(d.category_dist), backgroundColor: genColors(Object.keys(d.category_dist).length)}]},
+        options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {position: 'right', labels: {font: {size: 11}}}}}
+      });
+    }
+
+  } catch (e) { el.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>' + esc(e.message) + '</p></div>'; }
+}
+
+/* ==================== 补货清单 ==================== */
+/* 策略效果摘要:满足率/利润提升/损失下降 + 四策略对比折叠表 */
+function renderEvalSummary(ev) {
+  const sl = ev.service_level_pct;
+  const pi = ev.profit_improvement_vs_yesterday_pct;
+  const lr = ev.loss_reduction_vs_yesterday_pct;
+  const slTxt = sl != null ? fmt(sl) + '%' : '--';
+  const piTxt = pi != null ? (pi >= 0 ? '+' : '') + fmt(pi) + '%' : '--';
+  const lrTxt = lr != null ? (lr >= 0 ? '-' : '+') + fmt(Math.abs(lr)) + '%' : '--';
+  const piCls = pi == null ? '' : (pi >= 0 ? '' : 'danger');
+  const lrCls = lr == null ? '' : (lr >= 0 ? '' : 'danger');
+  let html = `<div class="stat-grid">
+    <div class="stat-card"><div class="label">满足率</div><div class="value">${slTxt}</div><div class="sub">要买的人里有多少买到了</div></div>
+    <div class="stat-card ${piCls}"><div class="label">利润提升</div><div class="value">${piTxt}</div><div class="sub">比按昨天销量进货多赚</div></div>
+    <div class="stat-card ${lrCls}"><div class="label">损失下降</div><div class="value">${lrTxt}</div><div class="sub">比按昨天销量进货少亏</div></div>
+  </div>`;
+  const strategies = ev.strategies || [];
+  if (strategies.length) {
+    const rows = strategies.map(s => {
+      const name = s.name === 'Agent建议' ? '智能进货建议' : esc(s.name);
+      const mdl = s.mean_daily_loss != null ? fmt(s.mean_daily_loss) + ' 元' : '--';
+      const tp = s.total_profit != null ? fmt(s.total_profit) + ' 元' : '--';
+      return `<tr><td>${name}</td><td>${mdl}</td><td>${tp}</td></tr>`;
+    }).join('');
+    html += `<details class="card" style="padding:14px 20px"><summary style="cursor:pointer;font-size:14px;font-weight:600">📊 四种进货方式对比(点开看明细)</summary><div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>进货方式</th><th>日均损失</th><th>总利润</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+  }
+  return html;
+}
+async function loadReplenishment() {
+  const el = document.getElementById('replenishmentContent');
+  const evalEl = document.getElementById('evalSummary');
+  if (evalEl) evalEl.innerHTML = '';
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p>正在计算每样商品该进多少...</p></div>';
+  try {
+    /* 并行请求补货清单和策略评估,评估失败时静默跳过 */
+    const evalPromise = api('/api/evaluation/baseline').catch(() => null);
+    const d = await api('/api/replenishment/list');
+    const ev = await evalPromise;
+    if (evalEl && ev) evalEl.innerHTML = renderEvalSummary(ev);
+    const items = d.items || [];
+    if (!items.length) { el.innerHTML = '<div class="empty-state"><div class="icon">📦</div><p>暂无进货数据</p></div>'; return; }
+    const totalReorder = items.reduce((s, r) => s + (r.reorder_qty || 0), 0);
+    let html = `<div style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:13px;color:var(--text2)">共 ${items.length} 样商品,今天总共要进 ${fmt(totalReorder,0)} 件</span>
+      <a href="/api/replenishment/export" class="btn btn-outline btn-sm">⬇ 导出表格</a></div>`;
+    html += `<div style="overflow-x:auto"><table>
+      <thead><tr><th>编号</th><th>商品名</th><th>当前库存</th><th>还在路上</th><th>日均真实需求</th><th>需求波动</th><th>建议进货量</th><th>不缺货把握</th><th>过期风险</th><th>万一缺货损失(元)</th><th>万一进多损失(元)</th></tr></thead><tbody>`;
+    items.forEach(r => {
+      const u = esc(r.unit || '件');
+      html += `<tr>
+        <td><span class="badge gray">${esc(r.sku_id)}</span></td>
+        <td>${esc(r.sku_name)}</td>
+        <td>${fmt(r.current_inventory,0)} ${u}</td>
+        <td>${fmt(r.in_transit,0)} ${u}</td>
+        <td>${fmt(r.demand_mean,1)} ${u}/天</td>
+        <td>${fmt(r.demand_std,1)} ${u}</td>
+        <td><strong style="color:var(--primary-dark);font-size:15px">${fmt(r.reorder_qty,0)} ${u}</strong></td>
+        <td>${fmt(r.service_level,1)}%</td>
+        <td>${riskBadge(r.waste_risk_level)}</td>
+        <td>${fmt(r.expected_stockout_loss,1)} 元</td>
+        <td>${fmt(r.expected_overstock_loss,1)} 元</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+    html += '<p style="font-size:12px;color:var(--text2);margin-top:10px;line-height:1.7">💡 「万一缺货损失」和「万一进多损失」是按历史数据估算的损失金额:缺货损失=少卖一件少赚的钱+顾客流失的损失;进多损失=多进一件卖不掉亏的钱</p>';
+    el.innerHTML = html;
+  } catch (e) { el.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>' + esc(e.message) + '</p></div>'; }
+}
+
+/* ==================== 需求预测 ==================== */
+async function initForecast() {
+  const el = document.getElementById('forecastContent');
+  try {
+    if (!skuList.length) {
+      const d = await api('/api/dashboard/sku-list');
+      skuList = d.skus || [];
+    }
+    el.innerHTML = `<div class="card">
+      <div class="form-row">
+        <div class="form-group"><label>选择商品</label>
+          <select id="forecastSku">${skuList.map(s => `<option value="${esc(s.sku_id)}">${esc(s.sku_name)} (${esc(s.sku_id)})</option>`).join('')}</select></div>
+        <div class="form-group"><label>预测几天</label>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input type="range" id="forecastHorizon" min="1" max="30" value="7" style="flex:1;padding:0" oninput="document.getElementById('forecastHorizonVal').textContent=this.value+'天'">
+            <span id="forecastHorizonVal" style="font-size:15px;font-weight:700;color:var(--primary-dark);min-width:42px;text-align:right">7天</span>
+          </div></div>
+      </div>
+      <button class="btn btn-primary" onclick="loadForecast()">生成预测</button>
+    </div>
+    <div id="forecastResult"></div>`;
+    if (skuList.length) loadForecast();
+  } catch (e) { el.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>' + esc(e.message) + '</p></div>'; }
+}
+async function loadForecast() {
+  const skuId = document.getElementById('forecastSku').value;
+  const horizon = document.getElementById('forecastHorizon').value;
+  const el = document.getElementById('forecastResult');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p>正在预测...</p></div>';
+  try {
+    const d = await api(`/api/forecast/sku/${skuId}?horizon=${horizon}`);
+    const f = d.forecasts || [];
+    const hist = d.history || [];
+    const unit = d.unit || '件';
+    const avgFc = f.length ? f.reduce((s, r) => s + r.forecast, 0) / f.length : 0;
+    let html = `<div class="stat-grid">
+      <div class="stat-card"><div class="label">商品</div><div class="value" style="font-size:16px">${esc(d.sku_name)}</div></div>
+      <div class="stat-card"><div class="label">平均每天能卖</div><div class="value">${fmt(avgFc,1)}<span style="font-size:13px;font-weight:400"> ${esc(unit)}</span></div></div>
+      <div class="stat-card info"><div class="label">断货修正</div><div class="value">${fmt(d.correction_uplift_pct||0)}%</div><div class="sub">之前断货导致销量被低估,已修正</div></div>
+      <div class="stat-card warn"><div class="label">未来${horizon}天总需求</div><div class="value">${fmt(d.total_forecast_qty||0,0)}<span style="font-size:13px;font-weight:400"> ${esc(unit)}</span></div><div class="sub">按这个量备货即可</div></div>
+    </div>`;
+    html += '<div class="card"><h3><span class="dot"></span>销量走势(蓝色实线=过去实际销量,绿色虚线=预测)</h3><div class="chart-box"><canvas id="chartForecast"></canvas></div></div>';
+    /* 明细表 */
+    html += `<div class="card"><h3><span class="dot"></span>每天预测明细(单位:${esc(unit)})</h3><div style="overflow-x:auto"><table><thead><tr><th>日期</th><th>星期</th><th>预计销量</th><th>最少</th><th>最多</th></tr></thead><tbody>`;
+    f.forEach(r => {
+      html += `<tr><td>${esc(r.date)}</td><td>${esc(r.dow)}</td><td><strong>${fmt(r.forecast,1)}</strong></td><td>${fmt(r.lower,1)}</td><td>${fmt(r.upper,1)}</td></tr>`;
+    });
+    html += '</tbody></table></div></div>';
+    el.innerHTML = html;
+    /* 绘图 */
+    destroyChart('forecast');
+    const histLabels = hist.map(h => h.date);
+    const histData = hist.map(h => h.sales);
+    const fcLabels = f.map(r => r.date);
+    const fcData = f.map(r => r.forecast);
+    const upperData = f.map(r => r.upper);
+    const lowerData = f.map(r => r.lower);
+    charts.forecast = new Chart(document.getElementById('chartForecast'), {
+      type: 'line',
+      data: {
+        labels: [...histLabels, ...fcLabels],
+        datasets: [
+          {label: '过去实际销量', data: [...histData, ...fcData.map(()=>null)], borderColor: '#93c5fd', pointRadius: 2, tension: .3},
+          {label: '预测销量', data: [...histData.map(()=>null), ...fcData], borderColor: '#10b981', borderDash: [6,3], pointRadius: 3, tension: .3},
+          {label: '最多可能', data: [...histData.map(()=>null), ...upperData], borderColor: 'rgba(16,185,129,.2)', backgroundColor: 'rgba(16,185,129,.1)', fill: '+1', pointRadius: 0},
+          {label: '最少可能', data: [...histData.map(()=>null), ...lowerData], borderColor: 'rgba(16,185,129,.2)', fill: false, pointRadius: 0}
+        ]
+      },
+      options: {responsive: true, maintainAspectRatio: false, scales: {y: {beginAtZero: true}}, plugins: {legend: {labels: {font: {size: 11}}}}}
+    });
+  } catch (e) { el.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>' + esc(e.message) + '</p></div>'; }
+}
+
+/* ==================== 因果分析 ==================== */
+async function loadCausal() {
+  const el = document.getElementById('causalContent');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p>正在分析什么因素影响销量...</p></div>';
+  try {
+    /* 因素管理面板 */
+    let factorPanelHtml = '';
+    try {
+      const fc = await api('/api/causal/factor-config');
+      const known = fc.known_factors || [];
+      const custom = fc.custom_factors || [];
+      if (known.length || custom.length) {
+        factorPanelHtml = '<div class="card" style="margin-bottom:12px"><h3 style="font-size:13px"><span class="dot"></span>参与分析的因素(点一下可以关掉不想看的)</h3><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">';
+        known.forEach(f => {
+          const cls = f.excluded ? 'badge gray' : 'badge green';
+          const style = f.excluded ? 'opacity:0.5;text-decoration:line-through;cursor:pointer' : 'cursor:pointer';
+          factorPanelHtml += `<span class="${cls}" style="${style}" onclick="toggleFactor('${esc(f.key)}')">${esc(f.label)} ${f.excluded ? '✕' : '✓'}</span>`;
+        });
+        custom.forEach(f => {
+          const cls = f.excluded ? 'badge gray' : 'badge blue';
+          const style = f.excluded ? 'opacity:0.5;text-decoration:line-through;cursor:pointer' : 'cursor:pointer';
+          factorPanelHtml += `<span class="${cls}" style="${style}" onclick="toggleFactor('${esc(f.key)}')">${esc(f.label)} ${f.excluded ? '✕' : '✓'}</span>`;
+        });
+        factorPanelHtml += '</div><p style="font-size:12px;color:var(--text2);margin-top:6px">灰色划掉的=不参与分析,点一下恢复</p></div>';
+      }
+    } catch (eFc) {}
+    const s = await api('/api/causal/summary');
+    let html = factorPanelHtml + `<div class="stat-grid">
+      <div class="stat-card"><div class="label">做促销平均多卖</div><div class="value">${fmt(s.avg_promo_uplift_pct)}%</div><div class="sub">排除其他干扰后的真实效果</div></div>
+      <div class="stat-card warn"><div class="label">价格敏感度</div><div class="value">${fmt(s.avg_price_elasticity,2)}</div><div class="sub">数字越大,调价对销量影响越大</div></div>
+      <div class="stat-card info"><div class="label">节假日平均多卖</div><div class="value">${fmt(s.avg_holiday_uplift_pct||0)}%</div></div>
+      <div class="stat-card"><div class="label">下大雨的影响</div><div class="value">${fmt(s.avg_rain_impact_pct||0)}%</div><div class="sub">负数=下雨天卖得少</div></div>
+    </div>`;
+    /* 全SKU效应表 */
+    const eff = await api('/api/causal/effects');
+    const effDict = eff.effects || {};
+    const effects = Object.entries(effDict).map(([id, v]) => ({sku_id: id, ...v}));
+    if (effects.length) {
+      /* 动态收集所有出现过的因素列(含自定义因素) */
+      const factorLabelMap = {promo:'做促销多卖%', holiday:'节假日多卖%', weekend:'周末多卖%', temperature:'气温影响', heavy_rain:'下大雨%'};
+      const allFactorKeys = [];
+      effects.forEach(r => {
+        Object.keys(r.effects || {}).forEach(k => {
+          if (k !== 'price_elasticity' && !allFactorKeys.includes(k)) allFactorKeys.push(k);
+        });
+      });
+      let th = '<th>编号</th><th>商品名</th><th>价格敏感度</th>';
+      allFactorKeys.forEach(k => { th += `<th>${esc(factorLabelMap[k] || k)}</th>`; });
+      let trs = '';
+      effects.forEach(r => {
+        const e = r.effects || {};
+        trs += `<tr><td><span class="badge gray">${esc(r.sku_id)}</span></td><td>${esc(r.sku_name)}</td>`;
+        trs += `<td>${e.price_elasticity!=null?fmt(e.price_elasticity,2):'-'}</td>`;
+        allFactorKeys.forEach(k => {
+          const eff = e[k] || {};
+          if (eff.factor_type === 'continuous') {
+            const v = eff.ate_pct_per_unit!=null ? fmt(eff.ate_pct_per_unit,2) + '%/单位' : '-';
+            trs += `<td>${v}</td>`;
+          } else {
+            const v = eff.ate_pct!=null ? fmt(eff.ate_pct) + '%' : '-';
+            const cls = (eff.ate_pct||0)>=0 ? 'green' : 'red';
+            trs += eff.ate_pct!=null ? `<td><span class="badge ${cls}">${v}</span></td>` : `<td>${v}</td>`;
+          }
+        });
+        trs += '</tr>';
+      });
+      html += `<div class="card"><h3><span class="dot"></span>每样商品受什么影响</h3><div style="overflow-x:auto"><table><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table></div></div>`;
+    }
+    /* 因素贡献 - 按SKU返回,计算全店平均 */
+    const fac = await api('/api/causal/factors');
+    const facDict = fac || {};
+    const facEntries = Object.values(facDict).filter(v => v.factors);
+    if (facEntries.length) {
+      /* 汇总各因素平均占比 */
+      const factorSums = {};
+      facEntries.forEach(entry => {
+        Object.entries(entry.factors).forEach(([k, v]) => {
+          if (!factorSums[k]) factorSums[k] = {sum: 0, n: 0};
+          factorSums[k].sum += v; factorSums[k].n++;
+        });
+      });
+      const avgFactors = Object.entries(factorSums).map(([k, v]) => ({factor: k, contribution_pct: v.sum / v.n})).sort((a, b) => b.contribution_pct - a.contribution_pct);
+      html += '<div class="two-col"><div class="card"><h3><span class="dot"></span>什么因素最影响销量(全店平均)</h3><div class="chart-box"><canvas id="chartFactors"></canvas></div></div>';
+      html += '<div class="card"><h3><span class="dot"></span>怎么看</h3><div class="factor-list">';
+      avgFactors.forEach(f => {
+        html += `<div class="factor-item"><span class="name">${esc(f.factor)}</span><div class="bar"><div class="progress-bar"><div class="fill" style="width:${Math.min(100,f.contribution_pct)}%"></div></div></div><span class="pct">${fmt(f.contribution_pct,1)}%</span></div>`;
+      });
+      html += '</div></div></div>';
+      el.innerHTML = html;
+      destroyChart('factors');
+      charts.factors = new Chart(document.getElementById('chartFactors'), {
+        type: 'pie',
+        data: {labels: avgFactors.map(f => f.factor),
+               datasets: [{data: avgFactors.map(f => f.contribution_pct),
+                           backgroundColor: genColors(avgFactors.length)}]},
+        options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {position: 'right', labels: {font: {size: 11}}}}}
+      });
+      return;
+    }
+    el.innerHTML = html;
+  } catch (e) {
+    if (e.message.includes('403') || e.message.includes('进阶')) {
+      el.innerHTML = '<div class="empty-state"><div class="icon">🔒</div><p>这个分析需要包含价格、促销、天气信息的数据</p><p style="font-size:13px;margin-top:8px">请在「数据管理」页面加载进阶版或完整版数据集</p></div>';
+    } else { el.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>' + esc(e.message) + '</p></div>'; }
+  }
+}
+
+/* 因素开关:切换某因素的排除状态并刷新分析 */
+async function toggleFactor(key) {
+  try {
+    const fc = await api('/api/causal/factor-config');
+    let excluded = fc.excluded || [];
+    if (excluded.includes(key)) {
+      excluded = excluded.filter(k => k !== key);
+    } else {
+      excluded.push(key);
+    }
+    await api('/api/causal/factor-config', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({excluded: excluded})
+    });
+    invalidateModules(); /* 因素配置变了,其他模块的结果也会变 */
+    loadCausal();
+  } catch (e) { toast('更新因素配置失败: ' + e.message, 'error'); }
+}
+
+/* ==================== 策略模拟 ==================== */
+async function initSimulation() {
+  const el = document.getElementById('simulationContent');
+  try {
+    if (!skuList.length) {
+      const d = await api('/api/dashboard/sku-list');
+      skuList = d.skus || [];
+    }
+    /* 获取数据中的自定义因素和已排除因素,只显示未排除的,带勾选框 */
+    let customFactors = [], excludedFactors = [];
+    try { const cf = await api('/api/causal/custom-factors'); customFactors = cf.factors || []; } catch (e2) {}
+    try { const fc = await api('/api/causal/factor-config'); excludedFactors = fc.excluded || []; } catch (e3) {}
+    const activeCustom = customFactors.filter(f => !excludedFactors.includes(f));
+    let customHtml = '';
+    if (activeCustom.length) {
+      customHtml = '<div style="margin-top:6px;padding-top:10px;border-top:1px dashed var(--border)"><p style="font-size:12px;color:var(--text2);margin:0 0 8px">您数据里的其他因素(勾选后填值才会参与试算,不想用的因素可在「因果分析」页关掉)</p><div class="form-row">' + activeCustom.map(f =>
+        `<div class="form-group"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="simCustomChk_${esc(f)}" style="width:auto;margin:0" onchange="document.getElementById('simCustom_${esc(f)}').disabled=!this.checked">${esc(f)}</label><input type="number" id="simCustom_${esc(f)}" step="any" placeholder="勾选后填值" disabled></div>`
+      ).join('') + '</div></div>';
+    }
+    el.innerHTML = `<div class="two-col">
+      <div class="card">
+        <h3><span class="dot"></span>想试什么调整</h3>
+        <div class="form-group"><label>选择商品</label>
+          <select id="simSku">${skuList.map(s => `<option value="${esc(s.sku_id)}">${esc(s.sku_name)} (${esc(s.sku_id)})</option>`).join('')}</select></div>
+        <div class="form-row">
+          <div class="form-group"><label>打几折(1=不打折,0.8=八折)</label>
+            <input type="number" id="simDiscount" min="0.3" max="1.0" step="0.05" value="0.8" placeholder="0.3~1.0"></div>
+          <div class="form-group"><label>调价幅度(%)</label>
+            <input type="number" id="simPriceChange" step="1" value="0" placeholder="如 -10 表示降价10%"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>做不做促销</label>
+            <select id="simPromo"><option value="">不改变</option><option value="true">做促销</option><option value="false">不做促销</option></select></div>
+          <div class="form-group"><label>是不是节假日</label>
+            <select id="simHoliday"><option value="">不改变</option><option value="true">是节假日</option><option value="false">不是节假日</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>气温(°C)</label>
+            <input type="number" id="simTemp" step="0.5" placeholder="留空=不改变"></div>
+          <div class="form-group"><label>下不下大雨</label>
+            <select id="simRain"><option value="">不改变</option><option value="true">下大雨</option><option value="false">不下雨</option></select></div>
+        </div>
+        ${customHtml}
+        <button class="btn btn-primary" onclick="runSimulation()">⚡ 算算会怎样</button>
+        <p style="font-size:12px;color:var(--text2);margin-top:10px">只填你想试的,没填的保持不变</p>
+      </div>
+      <div id="simResult"><div class="empty-state"><div class="icon">⚡</div><p>选好要试的调整,点按钮算一算</p></div></div>
+    </div>`;
+  } catch (e) { el.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>' + esc(e.message) + '</p></div>'; }
+}
+async function runSimulation() {
+  const body = {sku_id: document.getElementById('simSku').value};
+  const discount = parseFloat(document.getElementById('simDiscount').value);
+  const priceChange = parseFloat(document.getElementById('simPriceChange').value);
+  const promo = document.getElementById('simPromo').value;
+  const holiday = document.getElementById('simHoliday').value;
+  const temp = document.getElementById('simTemp').value;
+  const rain = document.getElementById('simRain').value;
+  if (!isNaN(discount) && discount > 0) body.discount = discount;
+  if (!isNaN(priceChange) && priceChange !== 0) body.price_change_pct = priceChange;
+  if (promo) body.is_promo = promo === 'true';
+  if (holiday) body.is_holiday = holiday === 'true';
+  if (temp !== '') body.temperature = parseFloat(temp);
+  if (rain) body.heavy_rain = rain === 'true';
+  /* 收集勾选启用的自定义因素值 */
+  document.querySelectorAll('[id^="simCustomChk_"]').forEach(chk => {
+    if (chk.checked) {
+      const key = chk.id.replace('simCustomChk_', '');
+      const inp = document.getElementById('simCustom_' + key);
+      if (inp && !inp.disabled && inp.value !== '') {
+        if (!body.custom) body.custom = {};
+        body.custom[key] = parseFloat(inp.value);
+      }
+    }
+  });
+  const el = document.getElementById('simResult');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p>正在仿真...</p></div>';
+  try {
+    const d = await api('/api/simulation/intervention', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+    });
+    const change = d.demand_change_pct || 0;
+    const cls = change >= 0 ? 'green' : 'red';
+    let html = `<div class="card">
+      <h3><span class="dot"></span>试算结果 - ${esc(d.sku_name || d.sku_id)}</h3>
+      <div class="stat-grid" style="grid-template-columns:1fr 1fr">
+        <div class="stat-card"><div class="label">现在每天能卖</div><div class="value">${fmt(d.base_demand,1)}</div></div>
+        <div class="stat-card"><div class="label">调整后每天能卖</div><div class="value">${fmt(d.simulated_demand,1)}</div></div>
+        <div class="stat-card ${change>=0?'':'danger'}"><div class="label">销量变化</div><div class="value" style="color:${change>=0?'var(--primary-dark)':'var(--danger)'}">${change>=0?'+':''}${fmt(change)}%</div></div>
+        <div class="stat-card info"><div class="label">进货要不要变</div><div class="value" style="font-size:18px">${esc(d.suggested_replenishment_adjustment || '维持')}</div></div>
+      </div>`;
+    if (Array.isArray(d.factor_details) && d.factor_details.length) {
+      html += '<h3 style="margin-top:16px"><span class="dot"></span>各项调整的影响</h3><div class="factor-list">';
+      d.factor_details.forEach(f => {
+        const num = Number(f.impact_pct) || 0;
+        const nm = esc(f.factor || '');
+        const chg = esc(f.change || '');
+        html += `<div class="factor-item"><span class="name" style="width:130px;line-height:1.3">${nm}${chg?`<br><small style="color:var(--text2);font-weight:400;font-size:11px">${chg}</small>`:''}</span><div class="bar"><div class="progress-bar"><div class="fill" style="width:${Math.min(100,Math.abs(num))}%;background:${num>=0?'var(--primary)':'var(--danger)'}"></div></div></div><span class="pct">${num>=0?'+':''}${fmt(num,1)}%</span></div>`;
+      });
+      html += '</div>';
+    }
+    /* 风险指标 */
+    html += `<div style="margin-top:14px;display:flex;gap:20px;flex-wrap:wrap">
+      <span style="font-size:13px;color:var(--text2)">可能断货:<strong style="color:var(--danger)">${fmt(d.stockout_risk_pct||0,1)}%</strong></span>
+      <span style="font-size:13px;color:var(--text2)">可能进多了:<strong style="color:var(--warn)">${fmt(d.overstock_risk_pct||0,1)}%</strong></span>
+      <span style="font-size:13px;color:var(--text2)">预计收入${(d.expected_revenue_change||0)>=0?'多赚':'少赚'}:<strong>${fmt(Math.abs(d.expected_revenue_change||0),1)}</strong></span>
+      <span style="font-size:13px;color:var(--text2)">预计扔掉的${(d.expected_waste_change||0)>=0?'增加':'减少'}:<strong style="color:${(d.expected_waste_change||0)>=0?'var(--danger)':'var(--primary-dark)'}">${fmt(Math.abs(d.expected_waste_change||0),1)}</strong></span>
+    </div>`;
+    html += '</div>';
+    el.innerHTML = html;
+  } catch (e) {
+    if (e.message.includes('403') || e.message.includes('进阶')) {
+      el.innerHTML = '<div class="empty-state"><div class="icon">🔒</div><p>这个功能需要包含价格、促销、天气信息的数据</p></div>';
+    } else { el.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>' + esc(e.message) + '</p></div>'; }
+  }
+}
+
+/* ==================== 损耗分析 ==================== */
+async function loadWaste() {
+  const el = document.getElementById('wasteContent');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p>正在分析损耗数据...</p></div>';
+  try {
+    const ov = await api('/api/waste/overview?period=week');
+    let html = `<div class="stat-grid">
+      <div class="stat-card danger"><div class="label">扔掉的占比</div><div class="value">${fmt(ov.overall_waste_rate_pct||0)}%</div><div class="sub">卖出的商品里有多少被扔了</div></div>
+      <div class="stat-card warn"><div class="label">有损耗的商品(种)</div><div class="value">${fmt(ov.n_skus_with_waste||0,0)}</div></div>
+      <div class="stat-card"><div class="label">总共扔掉</div><div class="value">${fmt(ov.total_waste_qty||0,0)} 件</div></div>
+      <div class="stat-card info"><div class="label">扔掉的钱</div><div class="value">${fmt(ov.total_waste_cost||0,0)} 元</div></div>
+    </div>`;
+    /* 趋势图 */
+    if (ov.trend && ov.trend.length) {
+      html += '<div class="card"><h3><span class="dot"></span>扔掉的占比走势</h3><div class="chart-box"><canvas id="chartWasteTrend"></canvas></div></div>';
+    }
+    /* 各商品扔掉走势 */
+    if (ov.sku_trends && ov.sku_trends.length) {
+      html += '<div class="card"><h3><span class="dot"></span>各商品扔掉走势</h3><p style="font-size:13px;color:var(--text2);margin-bottom:10px">每个商品每天扔掉多少件(只显示扔得最多的前8个商品)</p><div class="chart-box"><canvas id="chartWasteSkuTrend"></canvas></div></div>';
+    }
+    /* 归因 - 按SKU返回,计算全店平均 */
+    let avgAttr = null;
+    try {
+      const attr = await api('/api/waste/attribution');
+      const skuAttrs = attr.sku_attributions || {};
+      const attrSums = {};
+      let n = 0;
+      Object.values(skuAttrs).forEach(sa => {
+        if (sa.attribution) {
+          n++;
+          Object.entries(sa.attribution).forEach(([k, v]) => {
+            if (!attrSums[k]) attrSums[k] = 0;
+            attrSums[k] += v;
+          });
+        }
+      });
+      if (n > 0) {
+        avgAttr = Object.entries(attrSums).map(([k, v]) => ({factor: k, contribution_pct: v / n})).sort((a, b) => b.contribution_pct - a.contribution_pct);
+      }
+    } catch (e2) { /* full档才支持归因 */ }
+    if (avgAttr && avgAttr.length) {
+      html += '<div class="two-col"><div class="card"><h3><span class="dot"></span>为什么扔掉(全店平均)</h3><div class="chart-box"><canvas id="chartWasteAttr"></canvas></div></div>';
+      html += '<div class="card"><h3><span class="dot"></span>各原因占比</h3><div class="factor-list">';
+      avgAttr.forEach(a => {
+        html += `<div class="factor-item"><span class="name">${esc(a.factor)}</span><div class="bar"><div class="progress-bar"><div class="fill" style="width:${Math.min(100,a.contribution_pct)}%;background:${a.contribution_pct>30?'var(--danger)':a.contribution_pct>15?'var(--warn)':'var(--primary)'}"></div></div></div><span class="pct">${fmt(a.contribution_pct,1)}%</span></div>`;
+      });
+      html += '</div></div></div>';
+    }
+    /* Top损耗SKU */
+    const top = await api('/api/waste/top-skus?top_n=10');
+    if (top.items && top.items.length) {
+      html += '<div class="card"><h3><span class="dot"></span>扔得最多的商品</h3><div style="overflow-x:auto"><table><thead><tr><th>排名</th><th>编号</th><th>商品名</th><th>扔掉占比</th><th>扔掉数量</th><th>扔掉多少钱</th><th>怎么办</th></tr></thead><tbody>';
+      top.items.forEach((s,i) => {
+        html += `<tr><td>${i+1}</td><td><span class="badge gray">${esc(s.sku_id)}</span></td><td>${esc(s.sku_name)}</td>
+          <td><span class="badge ${(s.waste_rate_pct||0)>15?'red':'yellow'}">${fmt(s.waste_rate_pct||0)}%</span></td>
+          <td>${fmt(s.total_waste_qty,0)}</td><td>${fmt(s.waste_cost,0)}</td>
+          <td style="white-space:normal;max-width:350px;font-size:12px;color:var(--text2)">${esc((s.suggestions||[]).join('; '))}</td></tr>`;
+      });
+      html += '</tbody></table></div></div>';
+    }
+    /* 临期折扣优化 */
+    html += `<div class="card">
+      <h3><span class="dot"></span>临期商品打几折最划算</h3>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px">快过期的商品别硬等,算算打几折既能卖掉又少亏钱</p>
+      <div class="form-row">
+        <div class="form-group"><label>选择商品</label>
+          <select id="discSku">${skuList.length?skuList.map(s=>`<option value="${esc(s.sku_id)}">${esc(s.sku_name)}</option>`).join(''):''}</select></div>
+        <div class="form-group"><label>快过期的数量</label>
+          <input type="number" id="discQty" min="1" value="50" placeholder="快过期的数量"></div>
+        <div class="form-group"><label>价格敏感度(可不填)</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="number" id="discElasticity" step="0.1" placeholder="不填AI自动算" style="flex:1">
+            <button class="btn btn-outline btn-sm" onclick="estimateElasticity()" title="根据这个商品的历史调价记录自动估算">🤖 AI估算</button>
+          </div>
+          <div id="discElastHint" style="font-size:12px;color:var(--text2);margin-top:4px"></div></div>
+      </div>
+      <button class="btn btn-primary" onclick="optimizeDiscount()">算算打几折</button>
+      <div id="discResult" style="margin-top:14px"></div>
+    </div>`;
+    el.innerHTML = html;
+    /* 绘图 */
+    if (ov.trend && ov.trend.length) {
+      destroyChart('wasteTrend');
+      charts.wasteTrend = new Chart(document.getElementById('chartWasteTrend'), {
+        type: 'line',
+        data: {labels: ov.trend.map(t => t.period),
+               datasets: [{label: '扔掉的占比%', data: ov.trend.map(t => t.waste_rate_pct||0), borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.1)', fill: true, tension: .3}]},
+        options: {responsive: true, maintainAspectRatio: false, scales: {y: {beginAtZero: true}}}
+      });
+    }
+    if (ov.sku_trends && ov.sku_trends.length) {
+      destroyChart('wasteSkuTrend');
+      const skuPalette = ['#ef4444','#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#92400e'];
+      const allDates = [...new Set(ov.sku_trends.flatMap(s => s.daily.map(d => d.date)))].sort();
+      const skuDatasets = ov.sku_trends.map((s, i) => {
+        const dmap = {};
+        s.daily.forEach(d => { dmap[d.date] = d.waste_qty; });
+        return {
+          label: s.sku_name,
+          data: allDates.map(dt => dmap[dt] ?? 0),
+          borderColor: skuPalette[i % skuPalette.length],
+          backgroundColor: skuPalette[i % skuPalette.length],
+          tension: .3,
+          pointRadius: 2
+        };
+      });
+      charts.wasteSkuTrend = new Chart(document.getElementById('chartWasteSkuTrend'), {
+        type: 'line',
+        data: {labels: allDates, datasets: skuDatasets},
+        options: {responsive: true, maintainAspectRatio: false,
+          scales: {y: {beginAtZero: true, title: {display: true, text: '每天扔掉的数量(件)'}}},
+          plugins: {legend: {labels: {font: {size: 11}}}}}
+      });
+    }
+    if (avgAttr && avgAttr.length) {
+      destroyChart('wasteAttr');
+      charts.wasteAttr = new Chart(document.getElementById('chartWasteAttr'), {
+        type: 'doughnut',
+        data: {labels: avgAttr.map(a => a.factor),
+               datasets: [{data: avgAttr.map(a => a.contribution_pct),
+                           backgroundColor: genColors(avgAttr.length)}]},
+        options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {position: 'right', labels: {font: {size: 11}}}}}
+      });
+    }
+  } catch (e) { el.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>' + esc(e.message) + '</p></div>'; }
+}
+async function estimateElasticity() {
+  const skuId = document.getElementById('discSku').value;
+  if (!skuId) return;
+  const hintEl = document.getElementById('discElastHint');
+  const inputEl = document.getElementById('discElasticity');
+  hintEl.textContent = '正在估算...';
+  try {
+    const est = await api('/api/waste/estimate-elasticity?sku_id=' + encodeURIComponent(skuId));
+    inputEl.value = est.elasticity;
+    const tag = est.source === 'ai' ? '✅ ' : '💡 ';
+    hintEl.textContent = tag + (est.source_label || '');
+    hintEl.style.color = est.source === 'ai' ? 'var(--primary-dark)' : 'var(--text2)';
+  } catch (e) { hintEl.textContent = '估算失败:' + e.message; hintEl.style.color = 'var(--danger)'; }
+}
+async function optimizeDiscount() {
+  const skuId = document.getElementById('discSku').value;
+  const qty = parseFloat(document.getElementById('discQty').value);
+  const elastEl = document.getElementById('discElasticity').value;
+  let url = `/api/waste/optimize-discount?sku_id=${encodeURIComponent(skuId)}&near_expiry_qty=${qty}`;
+  if (elastEl) url += `&elasticity=${parseFloat(elastEl)}`;
+  const el = document.getElementById('discResult');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const d = await api(url, {method: 'POST'});
+    const srcTag = d.elasticity_source === 'ai' ? '🤖 ' : (d.elasticity_source === 'default' ? '💡 ' : '✏️ ');
+    el.innerHTML = `<div style="padding:14px;background:#f0fdf4;border-radius:8px">
+      <div style="display:flex;gap:20px;flex-wrap:wrap">
+        <div><div class="label" style="font-size:12px;color:var(--text2)">建议降价</div><div style="font-size:22px;font-weight:700;color:var(--primary-dark)">${fmt((d.optimal_discount||0)*100,0)}%</div></div>
+        <div><div class="label" style="font-size:12px;color:var(--text2)">折后卖</div><div style="font-size:22px;font-weight:700">${fmt(d.discounted_price||0,1)} 元</div></div>
+        <div><div class="label" style="font-size:12px;color:var(--text2)">能多卖出</div><div style="font-size:22px;font-weight:700">${fmt(d.expected_extra_sales||0,0)} 件</div></div>
+        <div><div class="label" style="font-size:12px;color:var(--text2)">能多赚</div><div style="font-size:22px;font-weight:700;color:var(--primary-dark)">${fmt(d.net_benefit||0,1)} 元</div></div>
+      </div>
+      <p style="font-size:12px;color:var(--text2);margin-top:8px">${srcTag}价格敏感度 ${fmt(d.price_elasticity,2)}:${esc(d.elasticity_source_label||'')}</p>
+      <p style="font-size:13px;margin-top:10px;line-height:1.6">${esc(d.recommendation||'')}</p></div>`;
+  } catch (e) { el.innerHTML = '<p style="color:var(--danger);font-size:13px">' + esc(e.message) + '</p>'; }
+}
+
+/* ==================== 智能对话 ==================== */
+const CHAT_STORAGE_KEY = 'fresh_agent_chat_history';
+function loadChatHistory() {
+  try { return JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) || '[]'); } catch (e) { return []; }
+}
+function saveChatMsg(role, html) {
+  const history = loadChatHistory();
+  history.push({ role, html, time: new Date().toISOString() });
+  if (history.length > 200) history.splice(0, history.length - 200);
+  localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(history));
+}
+function renderChatHistory() {
+  const msgs = document.getElementById('chatMessages');
+  const history = loadChatHistory();
+  if (history.length === 0) return;
+  msgs.innerHTML = history.map(m => `<div class="chat-msg ${m.role}">${m.html}</div>`).join('');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+function clearChatHistory() {
+  localStorage.removeItem(CHAT_STORAGE_KEY);
+  document.getElementById('chatMessages').innerHTML = '<div class="chat-msg bot">您好!我是您的生鲜店智能助手。您可以问我:今天该进什么货、为什么扔了那么多、做促销能多卖多少、明天能卖多少等问题。请先在「数据管理」页面加载数据。</div>';
+}
+async function loadChatExamples() {
+  try {
+    const d = await api('/api/chat/examples');
+    const el = document.getElementById('chatExamples');
+    el.innerHTML = (d.examples || []).map(ex => `<button onclick="useExample('${esc(ex).replace(/'/g,"\\'")}')">${esc(ex)}</button>`).join('') + '<button onclick="clearChatHistory()" style="border-color:var(--danger);color:var(--danger)">清空对话</button>';
+  } catch (e) {}
+}
+function useExample(text) {
+  document.getElementById('chatInput').value = text;
+  sendChat();
+}
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  const msgs = document.getElementById('chatMessages');
+  const userHtml = esc(text);
+  msgs.insertAdjacentHTML('beforeend', `<div class="chat-msg user">${userHtml}</div>`);
+  saveChatMsg('user', userHtml);
+  msgs.scrollTop = msgs.scrollHeight;
+  /* 加载中 */
+  msgs.insertAdjacentHTML('beforeend', '<div class="chat-msg bot" id="chatLoading"><div class="loading"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div></div></div>');
+  msgs.scrollTop = msgs.scrollHeight;
+  try {
+    const d = await api('/api/chat/message', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text})
+    });
+    document.getElementById('chatLoading').remove();
+    /* 简单Markdown渲染 */
+    let reply = esc(d.reply || '');
+    reply = reply.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    reply = reply.replace(/`(.+?)`/g, '<code style="background:#f3f4f6;padding:1px 4px;border-radius:3px">$1</code>');
+    const botHtml = `${reply}<div style="margin-top:8px;font-size:11px;color:var(--text2)">我理解您在问:${esc(d.intent_label||d.intent)}</div>`;
+    msgs.insertAdjacentHTML('beforeend', `<div class="chat-msg bot">${botHtml}</div>`);
+    saveChatMsg('bot', botHtml);
+  } catch (e) {
+    document.getElementById('chatLoading').remove();
+    const errHtml = `<span style="color:var(--danger)">${esc(e.message)}</span>`;
+    msgs.insertAdjacentHTML('beforeend', `<div class="chat-msg bot">${errHtml}</div>`);
+    saveChatMsg('bot', errHtml);
+  }
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+/* ==================== 初始化 ==================== */
+loadDatasets();
+renderChatHistory();
+</script>
+<!-- 整理详情弹窗 -->
+<div id="cleaningModal" class="modal-overlay" onclick="if(event.target===this)closeCleaningModal()">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeCleaningModal()" aria-label="关闭">×</button>
+    <h3><span class="dot" style="background:var(--primary)"></span>系统帮您整理了数据</h3>
+    <div class="modal-desc">上传的数据有些小问题，系统已自动帮您处理好，您可以放心使用</div>
+    <div class="modal-body" id="cleaningModalBody"></div>
+    <div class="modal-footer"><button class="btn btn-primary" onclick="closeCleaningModal()">知道了</button></div>
+  </div>
+</div>
+</body>
+</html>

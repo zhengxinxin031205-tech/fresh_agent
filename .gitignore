@@ -1,0 +1,46 @@
+# ============================================================
+# Git 排除规则 - 生鲜零售智能补货与损耗控制 Agent
+# 保留: main.py / backend/ / frontend/ / data/内置数据集 /
+#       Dockerfile / .dockerignore / README.md /
+#       requirements.txt / build.spec
+# ============================================================
+
+# ── Python 缓存与编译产物(所有层级) ──
+__pycache__/
+*.pyc
+*.pyo
+
+# ── 本地虚拟环境(体积巨大,部署环境重新安装依赖) ──
+build_env/
+
+# ── IDE / 工具配置(记忆与规则不属于代码仓库) ──
+.joycode/
+
+# ── 打包产物 ──
+*.exe
+build/
+dist/
+
+# ── 根目录临时验证/测试脚本 ──
+_tmp_*
+_verify_*
+_test_*
+_baseline_*
+_compare_*
+_upload_test.py
+
+# ── 根目录临时输出文件 ──
+tmp_*.json
+tmp_*.html
+tmp_*.txt
+
+# ── data/ 目录: 排除测试与临时文件,保留内置数据集 ──
+# 保留: basic_retail_data.csv / advanced_retail_data.csv /
+#       full_retail_data.csv / external_validation_data.csv / .generated
+# 注: _test_* / _tmp_* / _verify_* / _baseline_* / _compare_* 等
+#     前缀规则已在上方全局生效,此处仅补充 data/ 特有的测试数据文件
+data/.uploads/
+data/test_file_*.csv
+data/test_infer.csv
+data/test_parquet.parquet
+data/test_rossmann*.csv

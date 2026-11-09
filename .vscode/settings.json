@@ -1,0 +1,8 @@
+{
+    "JoyCode.config.searchApiKey": {
+        "serpApiKey": "",
+        "googleApiKey": "",
+        "googleCSEId": "",
+        "tavilyApiKey": ""
+    }
+}

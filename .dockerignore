@@ -1,0 +1,47 @@
+# ============================================================
+# Docker 构建排除规则
+# 保留: main.py / backend/ / frontend/ / data/内置数据集
+# ============================================================
+
+# 本地虚拟环境(体积巨大,容器内重新安装依赖)
+build_env/
+
+# Python 缓存文件(所有层级)
+**/__pycache__/
+**/*.pyc
+
+# IDE / 工具配置
+.joycode/
+.git/
+
+# PyInstaller 打包配置(容器部署不需要)
+*.spec
+
+# 根目录临时验证/测试脚本
+_tmp_*
+_verify_*
+
+# 根目录临时输出文件
+tmp_*.json
+tmp_*.html
+tmp_*.txt
+
+# 文档(镜像内不需要)
+README.md
+
+# ── data/ 目录: 排除测试与临时文件,保留内置数据集 ──
+# 保留: basic_retail_data.csv / advanced_retail_data.csv /
+#       full_retail_data.csv / external_validation_data.csv / .generated
+data/_test_*
+data/_tmp_*
+data/tmp_*
+data/_verify_*
+data/_upload_test.py
+data/_baseline_*
+data/_compare_*
+data/test_file_*.csv
+data/test_infer.csv
+data/test_parquet.parquet
+data/test_rossmann*.csv
+# 上传缓存为运行时产物,Dockerfile 中会重新创建空目录
+data/.uploads/
